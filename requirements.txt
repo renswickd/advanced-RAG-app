@@ -1,4 +1,6 @@
 langchain
 langchain-community
+langchain-huggingface
 faiss-cpu
 pymupdf
+sentence-transformers

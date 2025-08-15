@@ -14,6 +14,7 @@ from utils.metadata_tracker import (
     update_ingestion_record,
 )
 from utils.file_utils import calculate_file_md5
+from utils.vector_store import create_or_update_vector_store
 
 def generate_doc_id(filename):
     return os.path.splitext(filename)[0].replace(" ", "_")
@@ -60,6 +61,7 @@ def main():
 
     state = load_ingestion_state()
     updated = False
+    all_new_chunks = []
 
     pdf_files = list_pdf_files(SOURCE_DIR)
     if not pdf_files:
@@ -79,7 +81,8 @@ def main():
 
         doc_id = generate_doc_id(filename)
         try:
-            ingest_pdf(file_path, doc_id, session_dir, logger)
+            new_chunks = ingest_pdf(file_path, doc_id, session_dir, logger)
+            all_new_chunks.extend(new_chunks)
             update_ingestion_record(filename, checksum, session_id, state)
             updated = True
         except IngestionError as e:
@@ -88,6 +91,10 @@ def main():
     if updated:
         save_ingestion_state(state)
         logger.info("Updated ingestion_state.json")
+
+        logger.info("Updating FAISS vector store...")
+        create_or_update_vector_store(all_new_chunks)
+        logger.info("Vector store update complete.")
 
     logger.info("Ingestion session complete.")
 

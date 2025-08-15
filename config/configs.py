@@ -1,6 +1,7 @@
 # directory configurations
 SOURCE_DIR = "data/source_data"
 PROCESSED_DIR = "data/processed_data"
+VECTOR_STORE_DIR = "vector_store/faiss_index"
 
 # state file for tracking ingestion
 STATE_FILE = "metadata/ingestion_state.json"

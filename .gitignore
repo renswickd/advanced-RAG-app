@@ -3,3 +3,5 @@ data/
 logs/
 __pycache__
 *.egg-info
+metadata/
+vector_store/
