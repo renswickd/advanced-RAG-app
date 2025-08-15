@@ -4,8 +4,9 @@ import logging
 import shutil
 from datetime import datetime
 from utils.exceptions import SessionInitializationError
+from config.configs import MAX_SESSIONS_TO_KEEP
 
-MAX_SESSIONS_TO_KEEP = 5
+# MAX_SESSIONS_TO_KEEP = 5
 
 def generate_session_id():
     """
@@ -38,11 +39,13 @@ def prune_old_sessions(folder_path: str, keep_last_n: int = MAX_SESSIONS_TO_KEEP
 
 def setup_directories(session_id: str):
     log_dir = os.path.join("logs")
+    source_dir = os.path.join("data", "source_data")
     processed_dir = os.path.join("data", "processed_data")
 
     session_dir = os.path.join(processed_dir, session_id)
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(session_dir, exist_ok=True)
+    os.makedirs(source_dir, exist_ok=True)
 
     # Prune old logs and processed_data
     prune_old_sessions(log_dir)
@@ -81,7 +84,7 @@ def setup_logger(session_id: str):
         logger.addHandler(file_handler)
 
         logger.info(f"Logger initialized for session: {session_id}")
-        return logger, session_dir
+        return logger #, session_dir
 
     except Exception as e:
         raise SessionInitializationError(
