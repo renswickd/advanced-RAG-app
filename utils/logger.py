@@ -6,8 +6,6 @@ from datetime import datetime
 from utils.exceptions import SessionInitializationError
 from config.configs import MAX_SESSIONS_TO_KEEP
 
-# MAX_SESSIONS_TO_KEEP = 5
-
 def generate_session_id():
     """
     Generates a unique session ID based on timestamp and UUID.
