@@ -1,0 +1,17 @@
+{
+  "NIPS-2017-attention-is-all-you-need-Paper.pdf": {
+    "checksum": "7a6bb1fcdceec29ff330d3af68fbe5d8",
+    "processed_at": "2025-08-15T20:33:20.645209",
+    "session_id": "20250815_203320_f34e2859"
+  },
+  "sample.pdf": {
+    "checksum": "4fa5a523dfe0a8aebbe67c7d5e6f0b3f",
+    "processed_at": "2025-08-15T20:33:21.095955",
+    "session_id": "20250815_203320_f34e2859"
+  },
+  "An Introduction to Transformers.pdf": {
+    "checksum": "95ab5de41c6db9e5a05895aa7b41c456",
+    "processed_at": "2025-08-15T20:37:18.956238",
+    "session_id": "20250815_203718_67a4bd73"
+  }
+}
