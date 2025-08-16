@@ -12,6 +12,10 @@ MAX_SESSIONS_TO_KEEP = 5
 # LLM configuration
 LLM_MODEL_NAME = "llama-3.3-70b-versatile"
 
+# RAG pipeline configurations
+MAX_MEMORY_TOKENS = 2000
+MAX_BUFFER_SIZE = 10
+
 # Retrieval configuration
 TOP_K_DEFAULT = 5
 SCORE_THRESHOLD_DEFAULT = 0.5
