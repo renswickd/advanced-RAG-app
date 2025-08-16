@@ -1,4 +1,7 @@
 langchain
 langchain-community
+langchain-huggingface
+langchain-groq
 faiss-cpu
 pymupdf
+sentence-transformers
