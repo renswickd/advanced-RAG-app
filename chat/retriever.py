@@ -6,6 +6,7 @@ from utils.exceptions import RetrievalError
 from utils.vector_store import load_vector_store
 from dotenv import load_dotenv
 from config.configs import TOP_K_DEFAULT, SCORE_THRESHOLD_DEFAULT, LLM_MODEL_NAME
+from utils.prompt_templates import RETRIEVER_SYSTEM_TEMPLATE, RETRIEVER_USER_QUERY_TEMPLATE
 
 # Load environment variables
 load_dotenv()
@@ -16,20 +17,22 @@ def get_llm():
 
 # Extract metadata filters via LLM
 def extract_filters_from_query(query: str, llm: ChatGroq, logger) -> Dict[str, str]:
-    prompt = f"""
-You are an highly skilled helpful assistant that reads user search queries and extracts metadata filters.
-Return a JSON object with optional keys: doc_id, page_num, date.
+#     prompt = f"""
+# You are an highly skilled helpful assistant that reads user search queries and extracts metadata filters.
+# Return a JSON object with optional keys: doc_id, page_num, date.
 
-For example, from "in document report1 page 3", return:
-{{ "doc_id": "report1", "page_num": "3" }}
+# For example, from "in document report1 page 3", return:
+# {{ "doc_id": "report1", "page_num": "3" }}
 
-User query: \"{query}\"
-"""
+# User query: \"{query}\"
+# """
     try:
-        resp = llm.invoke([("system", "Extract metadata filters."), ("human", prompt)])
+        resp = llm.invoke([("system", RETRIEVER_SYSTEM_TEMPLATE), ("human", RETRIEVER_USER_QUERY_TEMPLATE.format(query=query))])
         
-        filters = json.loads(resp.content)
-        return filters
+        if resp.content:
+            filters = json.loads(resp.content)
+            return filters
+        return {}
     except Exception as e:
         logger.warning(f"Failed to extract filters via LLM: {e}")
         return {}
