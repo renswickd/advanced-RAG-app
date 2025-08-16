@@ -1,16 +1,18 @@
+import json
 from typing import List, Dict, Any
 from langchain_groq import ChatGroq
 from utils.logger import setup_logger
 from utils.exceptions import RetrievalError
 from utils.vector_store import load_vector_store
 from dotenv import load_dotenv
+from config.configs import TOP_K_DEFAULT, SCORE_THRESHOLD_DEFAULT, LLM_MODEL_NAME
 
 # Load environment variables
 load_dotenv()
 
 # LLM Setup (Groq)
 def get_llm():
-    return ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
+    return ChatGroq(model_name=LLM_MODEL_NAME, temperature=0)
 
 # Extract metadata filters via LLM
 def extract_filters_from_query(query: str, llm: ChatGroq, logger) -> Dict[str, str]:
@@ -25,8 +27,7 @@ User query: \"{query}\"
 """
     try:
         resp = llm.invoke([("system", "Extract metadata filters."), ("human", prompt)])
-        # naive parsing
-        import json
+        
         filters = json.loads(resp.content)
         return filters
     except Exception as e:
@@ -34,7 +35,7 @@ User query: \"{query}\"
         return {}
 
 # Main retrieval function
-def retrieve(query: str, top_k: int = 5, score_threshold: float = 0.3, logger=None) -> List[Dict[str, Any]]:
+def retrieve(query: str, top_k: int = TOP_K_DEFAULT, score_threshold: float = SCORE_THRESHOLD_DEFAULT, logger=None) -> List[Dict[str, Any]]:
     if logger is None:
         logger = setup_logger("retrieval")
 
