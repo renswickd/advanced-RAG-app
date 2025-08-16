@@ -54,7 +54,6 @@ def retrieve(query: str, top_k: int = TOP_K_DEFAULT, score_threshold: float = SC
         docs_and_scores = embeddings.similarity_search_with_score(query, k=top_k * 2)
         # logger.debug(f"Retrieved {len(docs_and_scores)} documents before filtering.")
         # logger.debug(f"Retrieved documents: {docs_and_scores}")
-        # docs_and_scores: list of Document with metadata and score
 
         # Filter by metadata and threshold
         results = []
