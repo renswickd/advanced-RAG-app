@@ -1,8 +1,5 @@
-import os
 from typing import List, Dict, Any
 from langchain_groq import ChatGroq
-from langchain_community.vectorstores import FAISS
-from langchain.docstore.document import Document
 from utils.logger import setup_logger
 from utils.exceptions import RetrievalError
 from utils.vector_store import load_vector_store
