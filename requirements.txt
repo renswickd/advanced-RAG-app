@@ -5,3 +5,4 @@ langchain-groq
 faiss-cpu
 pymupdf
 sentence-transformers
+streamlit
