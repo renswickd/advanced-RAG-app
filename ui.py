@@ -68,7 +68,7 @@ with tabs[0]:
 
 # --- Chat Tab ---
 with tabs[1]:
-    st.header("Chat with Police Instructions Documents")
+    st.header("Chat with Documents")
 
     # Initialize session state
     if "session_id" not in st.session_state:
