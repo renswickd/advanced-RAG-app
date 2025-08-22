@@ -43,7 +43,7 @@ def init_session_state():
             "session_id": st.session_state.session_id,
             "chat_history": [],
             "agent": None,
-            "current_prompt": "",  # Make sure this is initialized
+            "user_query": "",  # Changed from user_input
             "max_references": 3
         }
 
@@ -80,6 +80,7 @@ try:
         page = st.radio("", ["Chat", "Document Upload"])
         logger.info(f"Selected page: {page}")
 
+        # Update the template button section in the sidebar
         if page == "Chat":
             st.markdown("### Prompt Templates")
             
@@ -88,12 +89,10 @@ try:
                     st.markdown(f"*{template['prompt']}*")
                     if st.button("Use Template", key=f"btn_{template['title']}"):
                         logger.info(f"Template selected: {template['title']}")
-                        # Update session state
-                        if "current_prompt" not in st.session_state:
-                            st.session_state.current_prompt = ""
-                        st.session_state.current_prompt = template['prompt']
-                        # Force a rerun to update the chat interface
-                        st.rerun()
+                        # Store both template text and a flag indicating it's new
+                        st.session_state.template_text = template['prompt']
+                        st.session_state.is_new_template = True
+                        logger.debug(f"Set template_text: {template['prompt'][:50]}...")
 
     # Main content
     if page == "Document Upload":
@@ -176,31 +175,51 @@ try:
                             logger.error(f"Error displaying references: {str(e)}")
                             st.error("Error displaying references")
 
-        # Chat input handling
-        prompt = None
-        
-        # Check for template prompt
-        if st.session_state.get("current_prompt"):
-            prompt = st.session_state.current_prompt
-            # Clear the current prompt after using it
-            st.session_state.current_prompt = ""
-            logger.info(f"Using template prompt: {prompt[:50]}...")
+        # Chat input handling (replace the existing chat input section)
+        if "user_query" in st.session_state and st.session_state.user_query:
+            # Show the template in a text area that can be modified
+            user_input = st.text_area(
+                "Your message:",
+                value=st.session_state.user_query,
+                key="chat_input",
+                height=100,
+                label_visibility="collapsed"
+            )
+            # Clear the template from session state after displaying
+            st.session_state.user_query = ""
         else:
             # Regular chat input
-            prompt = st.chat_input(placeholder="Ask about internal documents...")
+            # Update the chat input section
+            # Chat input handling
+            message_key = f"chat_input_{st.session_state.get('message_key', 0)}"
 
-        if prompt:
-            logger.info(f"Processing prompt: {prompt[:50]}...")
+            # Handle template selection
+            if st.session_state.get("is_new_template", False):
+                st.session_state[message_key] = st.session_state.template_text
+                st.session_state.is_new_template = False
+                st.session_state.message_key = st.session_state.get('message_key', 0) + 1
+
+            # Chat input with the template text if available
+            user_input = st.chat_input("Ask about internal documents...", key=message_key)
+
+        # Handle user input
+        if user_input:
+            logger.info(f"Processing user input: {user_input[:50]}...")
+            # Clear template after use
+            if "template_text" in st.session_state:
+                del st.session_state.template_text
+                
+            logger.info(f"Processing user input: {user_input[:50]}...")
             
             # Add user message to chat history
             st.session_state.chat_history.append({
                 "role": "user",
-                "content": prompt
+                "content": user_input
             })
 
             try:
                 with st.spinner("Thinking..."):
-                    response = st.session_state.agent.respond(prompt)
+                    response = st.session_state.agent.respond(user_input)
                     logger.info("Generated response successfully")
 
                     # Add assistant response to chat history
@@ -210,7 +229,6 @@ try:
                         "references": response.get("retrieved", [])
                     })
                     
-                # Force UI refresh
                 st.rerun()
                 
             except Exception as e:
