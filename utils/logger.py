@@ -17,20 +17,44 @@ def prune_old_sessions(folder_path: str, keep_last_n: int = MAX_SESSIONS_TO_KEEP
         return
 
     # Sort folders/files by modified time (newest first)
-    entries = sorted(
-        [(entry, os.path.getmtime(os.path.join(folder_path, entry)))
-         for entry in os.listdir(folder_path)],
-        key=lambda x: x[1],
-        reverse=True
-    )
+    entries = []
+    for entry in os.listdir(folder_path):
+        try:
+            full_path = os.path.join(folder_path, entry)
+            mtime = os.path.getmtime(full_path)
+            entries.append((entry, mtime))
+        except OSError as e:
+            print(f"Warning: Could not access {entry}: {e}")
+            continue
+
+    entries.sort(key=lambda x: x[1], reverse=True)
 
     # Delete older entries
     for entry, _ in entries[keep_last_n:]:
         full_path = os.path.join(folder_path, entry)
         try:
             if os.path.isdir(full_path):
-                shutil.rmtree(full_path)
+                # Close any open files in the directory
+                for root, dirs, files in os.walk(full_path, topdown=False):
+                    for name in files:
+                        try:
+                            file_path = os.path.join(root, name)
+                            os.chmod(file_path, 0o777)  # Grant full permissions
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                        except Exception as e:
+                            print(f"Warning: Could not remove file {name}: {e}")
+                    for name in dirs:
+                        try:
+                            dir_path = os.path.join(root, name)
+                            os.chmod(dir_path, 0o777)  # Grant full permissions
+                            os.rmdir(dir_path)
+                        except Exception as e:
+                            print(f"Warning: Could not remove directory {name}: {e}")
+                os.chmod(full_path, 0o777)  # Grant full permissions
+                shutil.rmtree(full_path, ignore_errors=True)
             elif os.path.isfile(full_path):
+                os.chmod(full_path, 0o777)  # Grant full permissions
                 os.remove(full_path)
         except Exception as e:
             print(f"Warning: Failed to delete {full_path}: {e}")
@@ -39,15 +63,18 @@ def setup_directories(session_id: str):
     log_dir = os.path.join("logs")
     source_dir = os.path.join("data", "source_data")
     processed_dir = os.path.join("data", "processed_data")
+    reference_dir = os.path.join("data", "reference_data", session_id)
 
     session_dir = os.path.join(processed_dir, session_id)
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(session_dir, exist_ok=True)
     os.makedirs(source_dir, exist_ok=True)
+    os.makedirs(reference_dir, exist_ok=True)
 
-    # Prune old logs and processed_data
+    # Prune old logs, processed_data and reference_data
     prune_old_sessions(log_dir)
     prune_old_sessions(processed_dir)
+    prune_old_sessions(os.path.dirname(reference_dir))
 
     return log_dir, session_dir
 

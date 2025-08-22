@@ -1,177 +1,208 @@
 import os
 import streamlit as st
-from ingestion.ingest import main as ingest_main
-from utils.logger import setup_logger, generate_session_id
 from chat.conversational_agent import ConversationalAgent
+from utils.logger import generate_session_id, setup_logger
+from utils.exceptions import (
+    DocumentProcessingError, 
+    SessionInitializationError,
+)
+from ingestion.ingest import main as ingest_main
 from config.configs import SOURCE_DIR
-import json
-from datetime import datetime
-import uuid
+import logging
 
-st.set_page_config(page_title="Advance-RAG Platform", layout="wide")
+# Initialize logging
+if "session_id" not in st.session_state:
+    st.session_state.session_id = generate_session_id()
 
-def set_user_query(prompt):
-    st.session_state["pending_query"] = prompt
+try:
+    logger = setup_logger(st.session_state.session_id)
+except Exception as e:
+    st.error(f"Failed to initialize logging: {str(e)}")
+    st.stop()
 
-def save_reference_data(session_id: str, reference_id: str, references: list):
-    """Save references to JSON file in reference_data/session_id directory"""
-    ref_dir = os.path.join("data", "reference_data", session_id)
-    os.makedirs(ref_dir, exist_ok=True)
+PROMPT_TEMPLATES = [
+    {
+        "title": "Statement Modification",
+        "prompt": "From my experience and understanding I have wriiten below as my project abstract \n attention refers to a mechanism where the output is produced by the dot product of the input, representing the similarity between locations in the input sequence\nWrite me expand my abstarct section for my thesis."
+    },
+    {
+        "title": "Evidence Handling",
+        "prompt": "Provide evidence for the following statement: 'Llama uses self-attention to compute a representation of the input sequence.'"
+    },
+    {
+        "title": "Find Relevant Information",
+        "prompt": "Help me to find relevant information about the following topic: 'The impact of attention mechanisms in neural networks'."
+    }
+]
 
-    # Ensure references are complete before saving
-    cleaned_references = []
-    for ref in references:
-        cleaned_ref = {
-            "chunk_id": ref.get("chunk_id", ""),
-            "doc_id": ref.get("doc_id", ""),
-            "page_num": ref.get("page_num", 0),
-            "content": ref.get("content", ""),
-            "score": float(ref.get("score", 0.0))
+# Initialize session state
+def init_session_state():
+    """Initialize all session state variables with error handling"""
+    try:
+        defaults = {
+            "session_id": st.session_state.session_id,
+            "chat_history": [],
+            "agent": None,
+            "current_prompt": "",
+            "max_references": 3
         }
-        cleaned_references.append(cleaned_ref)
 
-    ref_file = os.path.join(ref_dir, f"{reference_id}.json")
-    with open(ref_file, 'w', encoding='utf-8') as f:
-        json.dump(cleaned_references, f, indent=2, ensure_ascii=False)
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+                logger.info(f"Initialized session state: {key}")
 
-def load_reference_data(session_id: str, reference_id: str):
-    """Load references from JSON file"""
-    ref_file = os.path.join("data", "reference_data", session_id, f"{reference_id}.json")
-    if os.path.exists(ref_file):
-        with open(ref_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
+        if st.session_state.agent is None:
+            logger.info("Initializing conversational agent")
+            st.session_state.agent = ConversationalAgent(st.session_state.session_id)
+            
+    except Exception as e:
+        logger.error(f"Session initialization error: {str(e)}")
+        raise SessionInitializationError(f"Failed to initialize session: {str(e)}")
 
-def generate_reference_id():
-    """Generate a unique reference ID"""
-    return f"ref_{datetime.now().strftime('%H%M%S')}_{uuid.uuid4().hex[:6]}"
+try:
+    # Page configuration
+    st.set_page_config(
+        page_title="Internal Document Assistant",
+        page_icon=":robot:",
+        layout="wide"
+    )
 
-tabs = st.tabs(["Ingestion", "Chat"])
+    # Initialize the app state
+    init_session_state()
 
-# --- Ingestion Tab ---
-with tabs[0]:
-    st.header("Document Ingestion & Vector Store Management")
-    uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
-    if uploaded_files:
-        for file in uploaded_files:
-            file_path = os.path.join(SOURCE_DIR, file.name)
-            with open(file_path, "wb") as f:
-                f.write(file.getbuffer())
-        st.success(f"Uploaded {len(uploaded_files)} file(s) to {SOURCE_DIR}")
-    if st.button("Ingest Documents"):
-        with st.spinner("Ingesting documents..."):
-            try:
-                ingest_main()
-                st.success("Ingestion complete. Vector store updated.")
-            except Exception as e:
-                st.error(f"Ingestion failed: {e}")
+    # Sidebar
+    with st.sidebar:
+        st.title("Doc Assistant")
+        logger.debug("Rendering sidebar")
 
-# --- Chat Tab ---
-with tabs[1]:
-    st.header("Chat with Documents")
+        # Navigation
+        page = st.radio("", ["Chat", "Document Upload"])
+        logger.info(f"Selected page: {page}")
 
-    # Initialize session state
-    if "session_id" not in st.session_state:
-        st.session_state.session_id = generate_session_id()
-    if "agent" not in st.session_state:
-        st.session_state.agent = ConversationalAgent(st.session_state.session_id)
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    if "reference_chunks" not in st.session_state:
-        st.session_state.reference_chunks = []
-    if "pending_query" not in st.session_state:
-        st.session_state.pending_query = ""
-    if "current_reference_id" not in st.session_state:
-        st.session_state.current_reference_id = None
-
-    # Sample Questions
-    with st.expander("Sample Prompt Templates", expanded=True):
-        cols = st.columns(3)
-        prompts = [
-            "What is the use of Attention in Transformers?",
-            "Summarize the main findings of the report.",
-            "Which document discusses self-attention?",
-        ]
-        for i, prompt in enumerate(prompts):
-            with cols[i]:
-                if st.button(prompt, key=f"faq_{i}"):
-                    st.session_state.pending_query = prompt
-
-    # Layout: Chat and References
-    chat_col, ref_col = st.columns([2, 1])
-
-    # Chat Column
-    with chat_col:
-        st.subheader("Your Conversation History")
-
-        # Input form for questions
-        with st.form("chat_form", clear_on_submit=True):
-            user_input = st.text_area(
-                "Ask your question...",
-                value=st.session_state.pending_query,
-                height=80,
-                key="user_query",
-                label_visibility="collapsed"
-            )
-            send = st.form_submit_button("Send", use_container_width=True)
-
-        if send and user_input.strip():
-            try:
-                result = st.session_state.agent.respond(user_input)
-
-                # Generate reference ID and save references
-                reference_id = None
-                if result.get("retrieved"):
-                    reference_id = generate_reference_id()
-                    save_reference_data(
-                        st.session_state.session_id,
-                        reference_id,
-                        result["retrieved"]
-                    )
-
-                st.session_state.chat_history.append({
-                    "sender": "user",
-                    "message": user_input
-                })
-                st.session_state.chat_history.append({
-                    "sender": "agent",
-                    "message": result["reply"],
-                    "reference_id": reference_id,
-                    "references": result.get("retrieved", [])
-                })
-                st.session_state.reference_chunks = result.get("retrieved", [])
-                st.session_state.pending_query = ""
-                st.rerun()
-            except Exception as e:
-                st.error(f"Chat failed: {e}")
-
-        # Display chat history
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["sender"]):
-                st.write(msg["message"])
-                if msg["sender"] == "agent" and msg.get("reference_id"):
-                    if st.button("📚 References", key=f"ref_{msg.get('reference_id')}", use_container_width=True):
-                        st.session_state.current_reference_id = msg["reference_id"]
+        if page == "Chat":
+            st.markdown("### Prompt Templates")
+            
+            for template in PROMPT_TEMPLATES:
+                with st.expander(f"📋 {template['title']}", expanded=False):
+                    st.markdown(f"*{template['prompt']}*")
+                    if st.button("Use this template", key=f"template_{template['title']}"):
+                        logger.info(f"Selected template: {template['title']}")
+                        st.session_state.current_prompt = template['prompt']
                         st.rerun()
 
-    # Reference Column
-    with ref_col:
-        st.subheader("References")
+    # Main content
+    if page == "Document Upload":
+        st.header("Document Upload")
+        logger.info("Accessing document upload page")
 
-        # Load and display references
-        if st.session_state.current_reference_id:
-            refs = load_reference_data(
-                st.session_state.session_id,
-                st.session_state.current_reference_id
-            )
-        else:
-            refs = st.session_state.reference_chunks
+        uploaded_files = st.file_uploader(
+            "Upload Documents to Update the Knowledge Base",
+            type=["pdf"],
+            accept_multiple_files=True
+        )
 
-        if refs:
-            for ref in refs:
-                with st.expander(f"{ref['doc_id']} - Page {ref['page_num']}", expanded=False):
-                    st.write(ref['content'])
-                    if 'score' in ref:
-                        st.caption(f"Relevance Score: {ref['score']:.2f}")
+        if uploaded_files:
+            logger.info(f"Received {len(uploaded_files)} files for upload")
+            
+            if st.button("Process Documents", type="primary"):
+                with st.spinner("Processing..."):
+                    try:
+                        for file in uploaded_files:
+                            file_path = os.path.join(SOURCE_DIR, file.name)
+                            logger.info(f"Processing file: {file.name}")
+                            
+                            try:
+                                with open(file_path, "wb") as f:
+                                    f.write(file.getbuffer())
+                                logger.debug(f"Saved file: {file_path}")
+                            except IOError as e:
+                                logger.error(f"Failed to save file {file.name}: {str(e)}")
+                                raise DocumentProcessingError(f"Failed to save {file.name}: {str(e)}")
+                                
+                        ingest_main()
+                        logger.info("Document processing completed successfully")
+                        st.success("Documents processed successfully!")
+                        
+                    except Exception as e:
+                        logger.error(f"Document processing error: {str(e)}")
+                        st.error(f"Error processing documents: {str(e)}")
+
+    else:  # Chat interface
+        st.header("Internal Document Assistant")
+        logger.info("Accessing chat interface")
+
+        # Chat messages area
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+                if message.get("references"):
+                    with st.expander("📚 View Sources", expanded=False):
+                        try:
+                            refs = sorted(
+                                message["references"],
+                                key=lambda x: float(x.get('score', 0)),
+                                reverse=True
+                            )[:st.session_state.max_references]
+
+                            docs = {}
+                            for ref in refs:
+                                doc_id = ref["doc_id"]
+                                if doc_id not in docs:
+                                    docs[doc_id] = []
+                                docs[doc_id].append(ref)
+
+                            for doc_id, doc_refs in docs.items():
+                                with st.expander(f"📄 {doc_id}", expanded=False):
+                                    for idx, ref in enumerate(doc_refs, 1):
+                                        with st.expander(f"Reference {idx} (Page {ref['page_num']})", expanded=False):
+                                            try:
+                                                score = float(ref.get('score', 0))
+                                                score = min(max(score, 0), 1)
+                                                st.markdown("**Relevance Score:**")
+                                                st.progress(score)
+                                                st.markdown(f"Score: {score:.2%}")
+                                            except (ValueError, TypeError) as e:
+                                                logger.warning(f"Invalid score format: {str(e)}")
+                                                st.markdown("**Relevance Score:** Not available")
+
+                                            st.markdown("**Content:**")
+                                            st.markdown(f"```{ref['content']}```")
+                        except Exception as e:
+                            logger.error(f"Error displaying references: {str(e)}")
+                            st.error("Error displaying references")
+
+        # Chat input handling
+        if st.session_state.current_prompt:
+            prompt = st.session_state.current_prompt
+            st.session_state.current_prompt = ""
+            logger.info("Processing template prompt")
+            st.rerun()
         else:
-            st.info("Click the reference button on any response to view its sources")
+            prompt = st.chat_input(placeholder="Ask about internal documents...")
+
+        if prompt:
+            logger.info(f"Received user prompt: {prompt[:50]}...")
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+            try:
+                with st.spinner("Thinking..."):
+                    response = st.session_state.agent.respond(prompt)
+                    logger.info("Generated response successfully")
+
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": response["reply"],
+                        "references": response.get("retrieved", [])
+                    })
+                st.rerun()
+                
+            except Exception as e:
+                logger.error(f"Chat processing error: {str(e)}")
+                st.error(f"Error generating response: {str(e)}")
+                # Remove failed interaction from chat history
+                st.session_state.chat_history.pop()
+
+except Exception as e:
+    logger.critical(f"Application error: {str(e)}")
+    st.error("An unexpected error occurred. Please refresh the page and try again.")
