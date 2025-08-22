@@ -24,7 +24,6 @@ Advance-RAG is a modular, building, deploying, and managing retrieval-augmented 
 - **FAISS** (Vector store for semantic search)
 - **LangChain** (LLM and agent orchestration)
 - **PyMuPDF** (PDF parsing)
-- **FastAPI** (for backend API, if extended)
 - **Custom Logging & Exception Handling**
 
 ---

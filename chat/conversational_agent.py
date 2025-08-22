@@ -5,6 +5,7 @@ from utils.prompt_templates import CONV_SYSTEM_TEMPLATE, CONV_USER_QUERY_TEMPLAT
 from utils.exceptions import RetrievalError, RAGException
 from chat.retriever import retrieve
 from config.configs import LLM_MODEL_NAME, MAX_MEMORY_TOKENS, MAX_BUFFER_SIZE, TOP_K_DEFAULT, SCORE_THRESHOLD_DEFAULT
+import time
 
 class ConversationalAgent:
     def __init__(self, session_id):
@@ -12,6 +13,7 @@ class ConversationalAgent:
         self.llm = ChatGroq(model_name=LLM_MODEL_NAME, temperature=0)
         self.memory = create_memory(self.llm, max_token_limit=MAX_MEMORY_TOKENS, max_buffer_size=MAX_BUFFER_SIZE)
         # self.memory.llm = self.llm
+        self.last_response = None
 
     def respond(self, user_query):
         try:
@@ -43,3 +45,24 @@ class ConversationalAgent:
         except Exception as e:
             self.logger.exception("Conversation failed.")
             raise RAGException("Conversational pipeline error") from e
+
+    def stream_response(self, query: str):
+        """Stream the response word by word"""
+        try:
+            # Use the existing respond method to get the full result
+            result = self.respond(query)
+            self.last_response = result  # Store for later reference
+
+            # Split response into words and yield them with small delays
+            words = result["reply"].split()
+            for i, word in enumerate(words):
+                yield word + (" " if i < len(words) - 1 else "")
+                time.sleep(0.05)  # Adjust delay as needed
+
+        except Exception as e:
+            yield f"Error: {str(e)}"
+            self.last_response = None
+
+    def get_last_response(self):
+        """Return the last complete response"""
+        return self.last_response
